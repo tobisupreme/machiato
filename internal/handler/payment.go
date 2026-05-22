@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -41,7 +43,12 @@ func (h *PaymentHandler) CompletePayment(w http.ResponseWriter, r *http.Request)
 		ReferenceNumber     string `json:"reference_number"`
 		TransactionDateTime string `json:"transaction_date_time"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "could not read body"})
+		return
+	}
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
@@ -54,6 +61,7 @@ func (h *PaymentHandler) CompletePayment(w http.ResponseWriter, r *http.Request)
 		ReferenceNumber:     body.ReferenceNumber,
 		TransactionDateTime: body.TransactionDateTime,
 		ReceivedAt:          time.Now(),
+		RawPayload:          json.RawMessage(raw),
 	})
 
 	writeJSON(w, http.StatusOK, map[string]any{

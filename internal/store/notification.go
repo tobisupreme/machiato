@@ -3,12 +3,14 @@ package store
 import (
 	"sync"
 	"time"
+	"encoding/json"
 )
 
 type PaymentNotification struct {
-	ReferenceNumber     string    `json:"reference_number"`
-	TransactionDateTime string    `json:"transaction_date_time"`
-	ReceivedAt          time.Time `json:"received_at"`
+	ReferenceNumber     string          `json:"reference_number"`
+	TransactionDateTime string          `json:"transaction_date_time"`
+	ReceivedAt          time.Time       `json:"received_at"`
+	RawPayload          json.RawMessage `json:"raw_payload"`
 }
 
 // NotificationStore is a thread-safe in-memory store for payment notifications.

@@ -56,8 +56,39 @@
       border-bottom: 1px solid #e5e7eb;
     }
 
-    tbody tr:last-child td { border-bottom: none; }
-    tbody tr:hover { background: #f9fafb; }
+    tbody tr.data-row { cursor: pointer; }
+    tbody tr.data-row:hover td { background: #f1f5f9; }
+
+    tbody tr.payload-row td {
+      padding: 0;
+      background: #0f172a;
+    }
+
+    tbody tr.payload-row.hidden { display: none; }
+
+    pre.payload {
+      margin: 0;
+      padding: 1rem 1.25rem;
+      font-size: 0.8rem;
+      color: #7dd3fc;
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.6;
+    }
+
+    .toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.75rem;
+      color: #6366f1;
+      background: none;
+      border: 1px solid #c7d2fe;
+      border-radius: 4px;
+      padding: 0.15rem 0.5rem;
+      cursor: pointer;
+    }
+    .toggle-btn:hover { background: #eef2ff; }
 
     #empty {
       text-align: center;
@@ -105,23 +136,58 @@
         <th>Reference Number</th>
         <th>Transaction Date/Time</th>
         <th>Received At</th>
+        <th>Payload</th>
       </tr>
     </thead>
     <tbody id="tbody">
-      <tr><td colspan="4" id="empty">No notifications yet.</td></tr>
+      <tr><td colspan="5" id="empty">No notifications yet.</td></tr>
     </tbody>
   </table>
 
   <script>
-    const statusEl  = document.getElementById('status');
-    const metaEl    = document.getElementById('meta');
-    const tbodyEl   = document.getElementById('tbody');
+    const statusEl   = document.getElementById('status');
+    const metaEl     = document.getElementById('meta');
+    const tbodyEl    = document.getElementById('tbody');
     const intervalEl = document.getElementById('interval');
 
     let pollTimer = null;
 
     function formatDate(iso) {
       try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    }
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function prettyJson(obj) {
+      try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
+    }
+
+    function buildRows(items, count) {
+      return [...items].reverse().flatMap((n, i) => {
+        const rowId = `payload-${count - i}`;
+        return [
+          `<tr class="data-row" onclick="togglePayload('${rowId}')">
+            <td>${count - i}</td>
+            <td>${escHtml(n.reference_number)}</td>
+            <td>${escHtml(n.transaction_date_time)}</td>
+            <td>${formatDate(n.received_at)}</td>
+            <td><button class="toggle-btn" onclick="event.stopPropagation();togglePayload('${rowId}')">&#123;&#125; View</button></td>
+          </tr>`,
+          `<tr id="${rowId}" class="payload-row hidden">
+            <td colspan="5"><pre class="payload">${escHtml(prettyJson(n.raw_payload))}</pre></td>
+          </tr>`
+        ];
+      }).join('');
+    }
+
+    function togglePayload(id) {
+      const row = document.getElementById(id);
+      if (row) row.classList.toggle('hidden');
     }
 
     async function poll() {
@@ -135,30 +201,26 @@
         metaEl.textContent = `${count} notification(s) — last updated ${new Date().toLocaleTimeString()}`;
 
         if (count === 0) {
-          tbodyEl.innerHTML = '<tr><td colspan="4" id="empty">No notifications yet.</td></tr>';
+          tbodyEl.innerHTML = '<tr><td colspan="5" id="empty">No notifications yet.</td></tr>';
           return;
         }
 
-        tbodyEl.innerHTML = [...items].reverse().map((n, i) => `
-          <tr>
-            <td>${count - i}</td>
-            <td>${escHtml(n.reference_number)}</td>
-            <td>${escHtml(n.transaction_date_time)}</td>
-            <td>${formatDate(n.received_at)}</td>
-          </tr>
-        `).join('');
+        // Preserve which payloads are open before re-render
+        const openIds = new Set(
+          [...document.querySelectorAll('.payload-row:not(.hidden)')].map(r => r.id)
+        );
+
+        tbodyEl.innerHTML = buildRows(items, count);
+
+        openIds.forEach(id => {
+          const row = document.getElementById(id);
+          if (row) row.classList.remove('hidden');
+        });
       } catch (err) {
         statusEl.textContent = 'Error';
         statusEl.className = 'error';
         metaEl.textContent = `Poll failed: ${err.message}`;
       }
-    }
-
-    function escHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
     }
 
     function startPolling() {
