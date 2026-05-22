@@ -1,5 +1,3 @@
-// Package main is the legacy root entry point.
-// The canonical entry point is cmd/mock-server.
 package main
 
 import (
