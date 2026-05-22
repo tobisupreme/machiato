@@ -1,0 +1,9 @@
+services:
+  mock-server:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - NSW_CLIENT_ID=mock-client-id
+      - NSW_CLIENT_SECRET=mock-client-secret
