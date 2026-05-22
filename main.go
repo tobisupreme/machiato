@@ -17,9 +17,18 @@ type tokenEntry struct {
 	expiresAt time.Time
 }
 
+type paymentNotification struct {
+	ReferenceNumber     string    `json:"reference_number"`
+	TransactionDateTime string    `json:"transaction_date_time"`
+	ReceivedAt          time.Time `json:"received_at"`
+}
+
 var (
 	tokenStore   = make(map[string]tokenEntry)
 	tokenStoreMu sync.RWMutex
+
+	notifications   []paymentNotification
+	notificationsMu sync.RWMutex
 )
 
 func getEnv(key, fallback string) string {
@@ -129,11 +138,37 @@ func handleCompletePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notificationsMu.Lock()
+	notifications = append(notifications, paymentNotification{
+		ReferenceNumber:     body.ReferenceNumber,
+		TransactionDateTime: body.TransactionDateTime,
+		ReceivedAt:          time.Now(),
+	})
+	notificationsMu.Unlock()
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status": map[string]any{
 			"fault_code": 0,
 			"message":    "success",
 		},
+	})
+}
+
+// GET /ws/payment/notifications
+func handleListNotifications(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	notificationsMu.RLock()
+	result := make([]paymentNotification, len(notifications))
+	copy(result, notifications)
+	notificationsMu.RUnlock()
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"count": len(result),
+		"items": result,
 	})
 }
 
@@ -143,6 +178,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/oauth2/token", handleToken)
 	mux.HandleFunc("/ws/payment/completePayment/v1", handleCompletePayment)
+	mux.HandleFunc("/ws/payment/notifications", handleListNotifications)
 
 	log.Printf("Mock server starting on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
