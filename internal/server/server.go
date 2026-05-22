@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	"mock-server-go/internal/assets"
 	"mock-server-go/internal/auth"
 	"mock-server-go/internal/handler"
 	"mock-server-go/internal/store"
@@ -35,6 +36,7 @@ func Run(cfg Config) error {
 	mux.Handle("/oauth2/token", tokenHandler)
 	mux.HandleFunc("/ws/payment/completePayment/v1", paymentHandler.CompletePayment)
 	mux.HandleFunc("/ws/payment/notifications", paymentHandler.ListNotifications)
+	mux.Handle("/", handler.NewWebHandler(assets.FS))
 
 	log.Printf("Mock server starting on :%s", cfg.Port)
 	return http.ListenAndServe(":"+cfg.Port, mux)

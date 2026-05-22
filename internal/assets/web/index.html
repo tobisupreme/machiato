@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Notifications</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      padding: 2rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 { font-size: 1.4rem; font-weight: 600; }
+
+    #status {
+      font-size: 0.8rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      background: #d1fae5;
+      color: #065f46;
+    }
+    #status.error { background: #fee2e2; color: #991b1b; }
+
+    #meta {
+      font-size: 0.8rem;
+      color: #666;
+      margin-bottom: 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.1);
+    }
+
+    thead { background: #1e293b; color: #fff; }
+
+    th, td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.875rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f9fafb; }
+
+    #empty {
+      text-align: center;
+      padding: 3rem;
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .interval-control {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: #555;
+    }
+
+    .interval-control input {
+      width: 60px;
+      padding: 0.2rem 0.4rem;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Payment Notifications</h1>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <div class="interval-control">
+        Poll every
+        <input type="number" id="interval" min="1" max="60" value="5" />
+        s
+      </div>
+      <span id="status">Live</span>
+    </div>
+  </header>
+
+  <p id="meta">Waiting for first poll…</p>
+
+  <table id="table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Reference Number</th>
+        <th>Transaction Date/Time</th>
+        <th>Received At</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="4" id="empty">No notifications yet.</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    const statusEl  = document.getElementById('status');
+    const metaEl    = document.getElementById('meta');
+    const tbodyEl   = document.getElementById('tbody');
+    const intervalEl = document.getElementById('interval');
+
+    let pollTimer = null;
+
+    function formatDate(iso) {
+      try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch('/ws/payment/notifications');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { count, items } = await res.json();
+
+        statusEl.textContent = 'Live';
+        statusEl.className = '';
+        metaEl.textContent = `${count} notification(s) — last updated ${new Date().toLocaleTimeString()}`;
+
+        if (count === 0) {
+          tbodyEl.innerHTML = '<tr><td colspan="4" id="empty">No notifications yet.</td></tr>';
+          return;
+        }
+
+        tbodyEl.innerHTML = [...items].reverse().map((n, i) => `
+          <tr>
+            <td>${count - i}</td>
+            <td>${escHtml(n.reference_number)}</td>
+            <td>${escHtml(n.transaction_date_time)}</td>
+            <td>${formatDate(n.received_at)}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        statusEl.textContent = 'Error';
+        statusEl.className = 'error';
+        metaEl.textContent = `Poll failed: ${err.message}`;
+      }
+    }
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function startPolling() {
+      clearInterval(pollTimer);
+      const seconds = Math.max(1, parseInt(intervalEl.value, 10) || 5);
+      poll();
+      pollTimer = setInterval(poll, seconds * 1000);
+    }
+
+    intervalEl.addEventListener('change', startPolling);
+    startPolling();
+  </script>
+</body>
+</html>
