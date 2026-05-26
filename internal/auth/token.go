@@ -38,8 +38,24 @@ func (s *TokenStore) Generate(ttl time.Duration) (string, error) {
 
 // IsValid reports whether the given token exists and has not expired.
 func (s *TokenStore) IsValid(token string) bool {
+	valid, _ := s.Validate(token)
+	return valid
+}
+
+// Validate reports whether the token is valid and why validation failed.
+func (s *TokenStore) Validate(token string) (bool, string) {
+	if token == "" {
+		return false, "empty_token"
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	entry, ok := s.store[token]
-	return ok && time.Now().Before(entry.expiresAt)
+	if !ok {
+		return false, "token_not_found"
+	}
+	if time.Now().After(entry.expiresAt) {
+		return false, "token_expired"
+	}
+	return true, ""
 }

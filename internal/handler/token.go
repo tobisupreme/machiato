@@ -26,6 +26,9 @@ func (h *TokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	clientID, clientSecret, ok := r.BasicAuth()
 	if !ok {
+		logAuthError(r, "missing_or_invalid_basic_auth", map[string]any{
+			"has_authorization_header": r.Header.Get("Authorization") != "",
+		})
 		w.Header().Set("WWW-Authenticate", `Basic realm="mock-server"`)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid basic auth"})
 		return
@@ -36,9 +39,17 @@ func (h *TokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.FormValue("grant_type") != "client_credentials" ||
+	grantType := r.FormValue("grant_type")
+	if grantType != "client_credentials" ||
 		clientID != h.clientID ||
 		clientSecret != h.clientSecret {
+		logAuthError(r, "invalid_client", map[string]any{
+			"grant_type":            grantType,
+			"client_id":             clientID,
+			"client_id_match":       clientID == h.clientID,
+			"client_secret_provided": clientSecret != "",
+			"client_secret_match":   clientSecret == h.clientSecret,
+		})
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
 		return
 	}

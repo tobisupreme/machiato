@@ -31,10 +31,20 @@ func (h *PaymentHandler) CompletePayment(w http.ResponseWriter, r *http.Request)
 
 	authHeader := r.Header.Get("Authorization")
 	if !strings.HasPrefix(authHeader, "Bearer ") {
+		logAuthError(r, "missing_bearer_token", map[string]any{
+			"authorization_header_present": authHeader != "",
+			"authorization_scheme":         headerScheme(authHeader),
+		})
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
 		return
 	}
-	if !h.tokens.IsValid(strings.TrimPrefix(authHeader, "Bearer ")) {
+	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if valid, reason := h.tokens.Validate(token); !valid {
+		logAuthError(r, "invalid_bearer_token", map[string]any{
+			"validation_reason": reason,
+			"token_len":         len(token),
+			"token_prefix":      tokenPrefix(token),
+		})
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
 		return
 	}
@@ -70,6 +80,23 @@ func (h *PaymentHandler) CompletePayment(w http.ResponseWriter, r *http.Request)
 			"message":    "success",
 		},
 	})
+}
+
+func headerScheme(authHeader string) string {
+	authHeader = strings.TrimSpace(authHeader)
+	if authHeader == "" {
+		return ""
+	}
+	parts := strings.SplitN(authHeader, " ", 2)
+	return strings.ToLower(parts[0])
+}
+
+func tokenPrefix(token string) string {
+	const n = 8
+	if len(token) <= n {
+		return token
+	}
+	return token[:n]
 }
 
 // ListNotifications handles GET /ws/payment/notifications.
